@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shubhamraj1601/Plasma-AI/schemas/v0/run_end.schema.json",
+  "title": "run_end v0.1",
+  "description": "Once per run, topic process-ts, event_ts = run start + duration.",
+  "type": "object",
+  "allOf": [{ "$ref": "envelope.schema.json" }],
+  "properties": {
+    "message_type": { "const": "run_end" },
+    "end_reason": { "enum": ["completed", "aborted"] }
+  },
+  "required": ["end_reason"],
+  "unevaluatedProperties": false
+}

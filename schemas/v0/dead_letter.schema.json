@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shubhamraj1601/Plasma-AI/schemas/v0/dead_letter.schema.json",
+  "title": "dead_letter v0.1",
+  "description": "Written by the Beam pipeline (Day 9+), topic dead-letter. Not produced by the generator.",
+  "type": "object",
+  "allOf": [{ "$ref": "envelope.schema.json" }],
+  "properties": {
+    "message_type": { "const": "dead_letter" },
+    "original_message": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+    },
+    "original_attributes": { "type": "object", "additionalProperties": { "type": "string" } },
+    "error_stage": { "enum": ["parse", "schema", "range", "ordering"] },
+    "error_code": { "type": "string", "minLength": 1 },
+    "error_detail": { "type": "string" },
+    "failed_ts": { "$ref": "envelope.schema.json#/$defs/timestamp" }
+  },
+  "required": [
+    "original_message", "original_attributes", "error_stage", "error_code",
+    "error_detail", "failed_ts"
+  ],
+  "unevaluatedProperties": false
+}

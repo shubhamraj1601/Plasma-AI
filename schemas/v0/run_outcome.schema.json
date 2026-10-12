@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shubhamraj1601/Plasma-AI/schemas/v0/run_outcome.schema.json",
+  "title": "run_outcome v0.1",
+  "description": "Once per run, topic process-ts, event_ts = run_end + run.outcome_delay_s.",
+  "type": "object",
+  "allOf": [{ "$ref": "envelope.schema.json" }],
+  "properties": {
+    "message_type": { "const": "run_outcome" },
+    "graphite_yield_percent": { "type": "number" },
+    "raman_id_ig": { "type": "number" },
+    "xrd_002_fwhm_deg": { "type": "number" },
+    "h2_purity_percent": { "type": "number" }
+  },
+  "required": ["graphite_yield_percent", "raman_id_ig", "xrd_002_fwhm_deg", "h2_purity_percent"],
+  "unevaluatedProperties": false
+}
