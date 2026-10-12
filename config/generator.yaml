@@ -1,0 +1,132 @@
+# Synthetic generator config (schema v0.1).
+# Every number the generator uses lives here. Values marked "placeholder" are
+# not measured; they are chosen so the reference run reproduces slide 3.
+
+schema_version: "0.1"
+reactor_id: MW-PR-01
+source: synthetic_generator
+
+run:
+  id_prefix: "SYN-"
+  gap_s: 5                 # seconds between runs
+  outcome_delay_s: 1       # run_outcome arrives after run_end
+
+# Message type -> Pub/Sub topic (P-04 pending: two topics plus dead-letter).
+# Local FileSink writes one <topic>.jsonl file per topic.
+topics:
+  run_start: process-ts
+  process_sample: process-ts
+  run_end: process-ts
+  run_outcome: process-ts
+  oes_block: oes-spectra
+  dead_letter: dead-letter
+
+process:
+  sampling_hz: 10          # Q13 assumption
+  noise_rel_sigma:         # Gaussian, relative to true value (placeholder)
+    power_kw: 0.005
+    reflected_power_w: 0.02
+    ch4_slpm: 0.005
+    h2_slpm: 0.005
+    pressure_kpa: 0.003
+    re_z_ohm: 0.01
+    im_z_ohm: 0.01
+    gas_temperature_k: 0.005
+
+outcomes:
+  noise_rel_sigma: 0.01    # applied once per run to each outcome (placeholder)
+
+sweep:                     # placeholder ranges around the reference run; real ranges from professor's PDFs on Day 6 (Q1)
+  power_kw: [1.5, 2.2]
+  ch4_slpm: [8.0, 16.0]
+  h2_slpm: [1.0, 4.0]
+  pressure_kpa: [70.0, 100.0]
+
+reference_run:             # slide 3, RUN-042
+  power_kw: 1.85
+  ch4_slpm: 12.0
+  h2_slpm: 2.0
+  pressure_kpa: 85.0
+
+# Physics placeholder (assumption Q8; replaced by the D2.3 model later).
+# All coefficients are placeholders. See CLAUDE.md section 8 for the relations.
+physics:
+  ref:                     # normalisation point: P0, Q_CH4,0, Q_H2,0, p0 (x0 = 12/14)
+    power_kw: 1.85
+    ch4_slpm: 12.0
+    h2_slpm: 2.0
+    pressure_kpa: 85.0
+  ne_cm3:                  # base * (P/P0)^power_exp * (p/p0)^pressure_exp
+    base: 3.1e+14          # PyYAML needs the exponent sign, else it reads a string
+    power_exp: 1.0
+    pressure_exp: -0.3
+  te_ev:
+    base: 2.9
+    power_exp: 0.2
+    pressure_exp: -0.4
+  gas_temperature_k:
+    base: 2220.0
+    power_exp: 0.3
+    pressure_exp: 0.1
+  reflected_power_w:       # base * (P/P0) * (1 + pressure_dev_coef * |p/p0 - 1|)
+    base: 110.0
+    pressure_dev_coef: 0.5
+  re_z_ohm:                # base * (ne / ne_base)^ne_exp
+    base: 34.0
+    ne_exp: -0.2
+  im_z_ohm:                # base * (p/p0)^pressure_exp
+    base: 11.0
+    pressure_exp: 0.2
+  stability_index:         # clip(1 - reflected_coef * Pr_W / (P_kW*1000) - pressure_dev_coef * |p/p0 - 1|, 0, 1)
+    reflected_coef: 0.6727
+    pressure_dev_coef: 0.2
+  carbon_growth_index:     # base * (x/x0)^x_exp * (te/te_base)^te_exp * (stability/stability_ref)
+    base: 0.81
+    x_exp: 1.5
+    te_exp: 0.5
+    stability_ref: 0.96
+  graphite_yield_percent:  # clip(base * (CGI_mean / cgi_base)^cgi_exp, 0, 100)
+    base: 68.0
+    cgi_exp: 0.8
+  raman_id_ig:             # base * (cgi_base / CGI_mean)^cgi_exp
+    base: 0.22
+    cgi_exp: 0.5
+  xrd_002_fwhm_deg:        # base * (tgas_base / T_gas_mean)^tgas_exp
+    base: 0.38
+    tgas_exp: 0.7
+  h2_purity_percent:       # clip(100 - impurity_base * (ne_base / ne_mean)^ne_exp * (x/x0)^x_exp, 0, 100)
+    impurity_base: 0.8
+    ne_exp: 0.5
+    x_exp: 2.0
+
+oes:
+  mode: lines              # Q3 assumption; alt: full
+  spectrometer_id: OES-01
+  sampling_hz: 1000        # Q13 assumption
+  frames_per_message: 100
+  integration_time_ms: 0.9 # placeholder
+  saturation_counts: 65535 # 16-bit detector, placeholder
+  dark_noise_counts: 50    # Gaussian sigma, placeholder
+  shot_noise_rel: 0.01     # Gaussian sigma relative to signal, placeholder
+  lines_nm: [480, 485, 486, 490, 500, 510, 516, 520]   # slide 2
+  # Per line, same order as lines_nm (placeholders). Drivers:
+  #   h_beta:    (1 - x)/(1 - x0) * (ne / ne_base)
+  #   c2:        (x/x0) * (te / te_base)
+  #   continuum: (T_gas / tgas_base)^continuum_temp_exp
+  line_amplitude_counts: [3000, 3000, 20000, 3000, 3000, 12000, 30000, 12000]
+  line_driver: [continuum, continuum, h_beta, continuum, continuum, c2, c2, c2]
+  continuum_temp_exp: 4.0
+  config_id:
+    lines: oes-lines-v0
+    full: oes-full2048-v0
+  full:
+    n_bins: 2048           # slide 2 allows 2048-4096
+    wavelength_range_nm: [400.0, 700.0]   # placeholder, Q3 open
+    line_fwhm_nm: 0.5      # placeholder
+    continuum_counts: 1500 # at T_gas = tgas_base, placeholder
+
+reactor:
+  volume_m3: null          # Q9 open; needed for P_d and tau
+
+window:
+  samples: 50              # slide 2 allows 50-100; used from Day 10, keep here

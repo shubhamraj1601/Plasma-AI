@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shubhamraj1601/Plasma-AI/schemas/v0/run_start.schema.json",
+  "title": "run_start v0.1",
+  "description": "Once per run, topic process-ts, event_ts = run start.",
+  "type": "object",
+  "allOf": [{ "$ref": "envelope.schema.json" }],
+  "properties": {
+    "message_type": { "const": "run_start" },
+    "setpoints": {
+      "type": "object",
+      "properties": {
+        "power_kw": { "type": "number" },
+        "ch4_slpm": { "type": "number" },
+        "h2_slpm": { "type": "number" },
+        "pressure_kpa": { "type": "number" }
+      },
+      "required": ["power_kw", "ch4_slpm", "h2_slpm", "pressure_kpa"],
+      "additionalProperties": false
+    },
+    "oes_config_id": { "type": "string", "minLength": 1 },
+    "generator_seed": { "type": ["integer", "null"] },
+    "duration_s": { "type": "number", "exclusiveMinimum": 0 }
+  },
+  "required": ["setpoints", "oes_config_id", "generator_seed", "duration_s"],
+  "unevaluatedProperties": false
+}

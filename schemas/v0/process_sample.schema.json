@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shubhamraj1601/Plasma-AI/schemas/v0/process_sample.schema.json",
+  "title": "process_sample v0.1",
+  "description": "Process time series sample, topic process-ts, 10 Hz.",
+  "type": "object",
+  "allOf": [{ "$ref": "envelope.schema.json" }],
+  "properties": {
+    "message_type": { "const": "process_sample" },
+    "power_kw": { "$ref": "envelope.schema.json#/$defs/nullable_number" },
+    "reflected_power_w": { "$ref": "envelope.schema.json#/$defs/nullable_number" },
+    "ch4_slpm": { "$ref": "envelope.schema.json#/$defs/nullable_number" },
+    "h2_slpm": { "$ref": "envelope.schema.json#/$defs/nullable_number" },
+    "pressure_kpa": { "$ref": "envelope.schema.json#/$defs/nullable_number" },
+    "re_z_ohm": { "$ref": "envelope.schema.json#/$defs/nullable_number" },
+    "im_z_ohm": { "$ref": "envelope.schema.json#/$defs/nullable_number" },
+    "gas_temperature_k": { "$ref": "envelope.schema.json#/$defs/nullable_number" },
+    "plasma_state": {
+      "description": "Noise-free ground-truth labels; generator only, null from real sensors.",
+      "type": ["object", "null"],
+      "properties": {
+        "ne_cm3": { "type": "number" },
+        "te_ev": { "type": "number" },
+        "stability_index": { "type": "number" },
+        "carbon_growth_index": { "type": "number" }
+      },
+      "required": ["ne_cm3", "te_ev", "stability_index", "carbon_growth_index"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "power_kw", "reflected_power_w", "ch4_slpm", "h2_slpm", "pressure_kpa",
+    "re_z_ohm", "im_z_ohm", "gas_temperature_k", "plasma_state"
+  ],
+  "unevaluatedProperties": false
+}
