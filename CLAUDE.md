@@ -35,7 +35,7 @@ The PM chat cannot see this session. The only channel back to it is `PROGRESS.md
   python -m pip install -r requirements.txt
   ```
 - Use `pathlib` for all paths, open files with `encoding="utf-8"` and `newline="\n"`, never hard-code `/` or `\`.
-- **No GCP calls yet.** The GCP project is set up in ST3 (Day 2). Until then everything runs locally at zero cost.
+- **GCP:** only through the ST3 scripts in section 6A Part B, and only after Raj approves each command that creates or changes something. Everything else still runs locally.
 - Dependencies: keep them few. Allowed now: `numpy`, `pyyaml`, `jsonschema`, `pytest`. Ask Raj before adding anything else. `google-cloud-pubsub` arrives on Day 8, `apache-beam[gcp]` on Day 9.
 
 ## 4. Delivery plan (do only the current task)
@@ -45,12 +45,12 @@ Story codes: ST1 decisions and architecture · ST2 data contract · ST3 GCP foun
 | Day | Date | Story | Task | Output |
 |---|---|---|---|---|
 | 1 | Mon 12 Oct | ST1 | Register walkthrough; questions to mentor | (PM chat) |
-| 2 | Tue 13 Oct | ST3 | GCP project, APIs, service accounts, budget alerts; repo skeleton | Alerts live, repo up |
+| **2** | Tue 13 Oct | **ST3** | **GCP project, APIs, service accounts, budget alerts (CURRENT TASK, Part B; slipped to 14 Oct)** | Budget and alerts configured; repo up (done) |
 | 3 | Wed 14 Oct | ST2 | Message schemas, OES config | Schema draft v0 (done in PM chat) |
 | 4 | Thu 15 Oct | ST1 | Architecture diagram v1 | (PM chat, done) |
 | 5 | Fri 16 Oct | ST2 | Mentor answers; BigQuery table designs; freeze schema v0.1 | Schema frozen |
 | 6 | Sat 17 Oct | ST4 | Parameter ranges from professor's PDFs into config | Ranges config |
-| **7** | Sun 18 Oct | **ST4** | **Generator v1 (CURRENT TASK, pulled forward to 12 Oct)** | Local run writes messages |
+| 7 | Sun 18 Oct | ST4 | Generator v1 (DONE 12 Oct; PM fixes are Part A of the current task) | Local run writes messages |
 | 8 | Mon 19 Oct | ST4 | Delay, drift, dropouts; publish to Pub/Sub at a set rate | Messages in subscription |
 | 9 | Tue 20 Oct | ST5 | Beam v1 on local runner: read, parse, validate, dead-letter | Bad messages routed |
 | 10 | Wed 21 Oct | ST5 | Windowing, normalisation, OES features (line peaks, C₂/Hβ ratio) | Feature records |
@@ -82,7 +82,49 @@ Because of D-07, **the generator is replaceable**. Nothing downstream may depend
 Pending mentor review (build so each is a config change, not a code change):
 P-02 Dataflow vs Cloud Run subscriber · P-03 raw spectra in Cloud Storage, tabular data in BigQuery · P-04 two topics plus dead-letter · P-05 versioned schema, OES size in config · P-06 cost guard (Dataflow only during work sessions, no Cloud Composer) · P-07 region `us-central1`.
 
-## 6. Current task: ST4 Generator v1
+## 6A. Current task (from Wed 14 Oct): Part A, then Part B
+
+Do Part A first (small), push it, then start Part B. One `PROGRESS.md` entry may cover both.
+
+### Part A: apply PM decisions on generator v1 (from PROGRESS.md "For PM", 12 Oct)
+1. **run_id format** changes to `{run.id_prefix}{YYYYMMDD}-{HHMMSS}-{nnn}` from the run's UTC start time, e.g. `SYN-20261014-020000-001`. `nnn` stays the run number within one CLI call. Update the schema pattern, the generator and the tests. (Two calls on the same day no longer collide.)
+2. **dead_letter envelope:** in `dead_letter` only, `reactor_id`, `run_id`, `seq_no`, `event_ts` and `source` may be `null`. The pipeline copies them from the original message when it parses, else `null`. `message_id` is a new UUID; `publish_ts` is when the dead letter is written. All other message types keep these fields non-null. Update `dead_letter.schema.json` and add tests for a parse-stage dead letter with nulls.
+3. **H₂ purity noise:** apply the relative outcome noise to the impurity, not the purity: impurity = 100 − purity_true; purity = 100 − impurity × (1 + N(0, σ)); then clip to [0, 100]. Other outcomes are unchanged. `--no-noise` still gives exactly 99.20.
+4. **Full OES mode:** no code change. `lines` stays the default and the only mode used for streaming to Pub/Sub. State in the README that `full` (~14 MB/s as JSON) is for short local or batch tests only, pending Q3 and P-03.
+5. **Branching:** push to `feature_ai`; Raj merges to `main` by PR.
+
+### Part B: ST3 GCP foundation (plan Day 2)
+
+**Ask Raj before running any command that creates or changes something in GCP.** Show the command, wait for a yes. Read-only `gcloud` commands are fine.
+
+Prerequisites from Raj (ask for any that are missing; do not guess them):
+- A GCP project ID (a new, dedicated project is recommended, e.g. `plasma-ai-d1`) with a billing account linked.
+- The billing account ID and the email that should get budget alerts.
+- Google Cloud SDK installed on the laptop, `gcloud auth login` and `gcloud auth application-default login` done.
+- Region `us-central1` (P-07, pending; keep it in config).
+- Budget: USD 200 (Q2 assumption).
+
+Build (PowerShell scripts that call `gcloud`; no Terraform, per the scope-cut order):
+```
+config/gcp.yaml                 # project_id, region, billing_account_id, budget_usd, alert_thresholds [0.5, 0.8, 1.0], alert_email
+infra/README.md                 # order to run, what each script does, how to undo it
+infra/00_check_prereqs.ps1      # read-only: gcloud installed, logged in, project exists, billing linked
+infra/01_enable_apis.ps1        # pubsub, dataflow, compute, bigquery, storage, iam, logging, monitoring, billingbudgets, cloudresourcemanager
+infra/02_service_accounts.ps1   # sa-generator: roles/pubsub.publisher
+                                # sa-dataflow: roles/dataflow.worker, roles/pubsub.subscriber, roles/pubsub.publisher (dead-letter), roles/bigquery.dataEditor, roles/bigquery.jobUser, roles/storage.objectAdmin
+infra/03_budget.ps1             # budget of budget_usd on the project, email alerts at 50 / 80 / 100 % of actual spend
+infra/04_verify.ps1             # read-only: lists enabled APIs, service accounts with roles, and the budget
+```
+Rules:
+- Scripts are idempotent: re-running them changes nothing and does not fail if a resource exists.
+- All values come from `config/gcp.yaml`; nothing project-specific is hard-coded. `config/gcp.yaml` is committed (it holds no secrets); never commit service account keys. Do not create any key files: local runs use Raj's application-default credentials, Dataflow uses `sa-dataflow`.
+- Grant roles at project level for now (simplest); note in `infra/README.md` that bucket- and topic-level grants are a hardening step.
+- Do not create Pub/Sub topics, buckets, BigQuery datasets or Dataflow jobs yet: those belong to Days 8, 11 and 12.
+- Budget alerts only notify; they do not stop spending. Say so in `infra/README.md`.
+
+Done when: `infra/04_verify.ps1` shows the APIs enabled, both service accounts with their roles, and the budget with three thresholds and Raj's email. A real alert cannot fire with zero spend; the first check that alerts arrive is after the Day 12 Dataflow run (PM decision).
+
+## 6. ST4 Generator v1 (done 12 Oct; kept as the reference spec)
 
 ### Goal
 A local Python generator that produces realistic-looking runs of the reactor as schema v0 messages, written to JSON Lines files (and optionally stdout), with no cloud dependency.
@@ -174,7 +216,7 @@ Attribute values are strings (a Pub/Sub rule). Lines are written in `event_ts` o
 3. `python -m pytest -q` passes, covering the tests in section 11.
 4. `--reference-run --no-noise` reproduces the slide 3 values (section 10) within 1 %.
 5. README explains setup, run and test in under 20 lines.
-6. Code is committed and pushed to `main`; `PROGRESS.md` has today's entry.
+6. Code is committed and pushed to `feature_ai`; Raj merges to `main` by PR. `PROGRESS.md` has today's entry.
 
 ## 7. Schema v0 (exact contract)
 
@@ -189,7 +231,7 @@ Mirror of PM doc tab ST2. Field names, types and units are fixed. Units are in f
 | message_id | string | UUID v4, derived from the seeded RNG so seeded runs are reproducible |
 | source | string enum | `synthetic_generator` (this generator), `client_simulator`, `published_batch` |
 | reactor_id | string | `MW-PR-01` (config) |
-| run_id | string | `{run.id_prefix}{YYYYMMDD}-{nnn}`, e.g. `SYN-20261012-001`; date = run start date (UTC) |
+| run_id | string | `{run.id_prefix}{YYYYMMDD}-{HHMMSS}-{nnn}`, e.g. `SYN-20261014-020000-001`; date and time = run start (UTC); `nnn` = run number within one CLI call |
 | seq_no | integer ≥ 0 | Counts per `(run_id, message_type)`, starting at 0, no gaps in v1. Gaps later mean dropouts. |
 | event_ts | string timestamp | When the sensor measured. For `oes_block`: time of its first frame. |
 | publish_ts | string timestamp | When published. In v1 equals `event_ts` (delay hook = 0). |
@@ -237,7 +279,7 @@ Payload fields sit next to the envelope fields at the top level (flat), except `
 `graphite_yield_percent`, `raman_id_ig`, `xrd_002_fwhm_deg`, `h2_purity_percent` (numbers). Computed from run-average plasma state (section 8), plus outcome noise.
 
 ### dead_letter (topic `dead-letter`; written by the Beam pipeline from Day 9, not by the generator)
-`original_message` (base64 string) · `original_attributes` (object of strings) · `error_stage` (`parse`, `schema`, `range`, `ordering`) · `error_code` (string) · `error_detail` (string) · `failed_ts` (timestamp). Write its JSON Schema now so it is ready.
+`original_message` (base64 string) · `original_attributes` (object of strings) · `error_stage` (`parse`, `schema`, `range`, `ordering`) · `error_code` (string) · `error_detail` (string) · `failed_ts` (timestamp). In `dead_letter` only, the envelope fields `reactor_id`, `run_id`, `seq_no`, `event_ts` and `source` may be `null` (copied from the original message when it parses).
 
 ### JSON Schema rules
 - Draft 2020-12. Unknown fields must be rejected, so typos are caught.
@@ -302,7 +344,7 @@ process:
     gas_temperature_k: 0.005
 
 outcomes:
-  noise_rel_sigma: 0.01    # applied once per run to each outcome (placeholder)
+  noise_rel_sigma: 0.01    # applied once per run to each outcome; for H2 purity it applies to the impurity (100 - purity) (placeholder)
 
 sweep:                     # placeholder ranges around the reference run; real ranges from professor's PDFs on Day 6 (Q1)
   power_kw: [1.5, 2.2]
@@ -445,7 +487,7 @@ You may decide implementation details (function names, internal structure, file 
 ## 14. Working rules
 
 - One plan task per session. If done early, improve tests or docs for that task; do not start the next day.
-- Small commits, imperative messages, e.g. `ST4: add OES lines model`. Push to `main` at the end of each session.
+- Small commits, imperative messages, e.g. `ST4: add OES lines model`. Push to `feature_ai` at the end of each session; Raj merges to `main` by PR.
 - Never commit secrets, service account keys, `.env` files or generated data (`out/` is git-ignored).
 - Type hints everywhere; docstrings on public functions; no dead code.
 - Seed every random draw from one `numpy.random.Generator` created from `--seed`.
