@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/shubhamraj1601/Plasma-AI/schemas/v0/dead_letter.schema.json",
   "title": "dead_letter v0.1",
-  "description": "Written by the Beam pipeline (Day 9+), topic dead-letter. Not produced by the generator.",
+  "description": "Written by the Beam pipeline (Day 9+), topic dead-letter. Not produced by the generator. Envelope fields reactor_id, run_id, seq_no, event_ts and source may be null; message_id is a new UUID and publish_ts is when the dead letter is written.",
   "type": "object",
-  "allOf": [{ "$ref": "envelope.schema.json" }],
+  "allOf": [{ "$ref": "envelope.schema.json#/$defs/dead_letter_envelope" }],
   "properties": {
     "message_type": { "const": "dead_letter" },
     "original_message": {

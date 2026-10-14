@@ -118,3 +118,55 @@ def test_dead_letter_schema(messages: dict[str, dict]) -> None:
         VALIDATOR.validate({**dead, "error_stage": "network"})
     with pytest.raises(MessageValidationError):
         VALIDATOR.validate({**dead, "original_attributes": {"seq_no": 3}})
+
+
+_DEAD_LETTER_NULLABLE = ("reactor_id", "run_id", "seq_no", "event_ts", "source")
+
+
+def _parse_stage_dead_letter(messages: dict[str, dict]) -> dict:
+    """A dead letter for a message that did not parse: the copied envelope fields are null."""
+    return {
+        "schema_version": "0.1",
+        "message_type": "dead_letter",
+        "message_id": messages["run_end"]["message_id"],
+        **{field: None for field in _DEAD_LETTER_NULLABLE},
+        "publish_ts": "2026-10-12T05:00:01.000000Z",
+        "original_message": "bm90IGpzb24=",
+        "original_attributes": {},
+        "error_stage": "parse",
+        "error_code": "JSON_DECODE",
+        "error_detail": "Expecting value: line 1 column 1 (char 0)",
+        "failed_ts": "2026-10-12T05:00:01.000000Z",
+    }
+
+
+def test_parse_stage_dead_letter_with_nulls_validates(messages: dict[str, dict]) -> None:
+    VALIDATOR.validate(_parse_stage_dead_letter(messages))
+
+
+@pytest.mark.parametrize("field", _DEAD_LETTER_NULLABLE)
+def test_dead_letter_copied_field_keeps_its_rule_when_not_null(messages: dict[str, dict], field: str) -> None:
+    bad_values = {"reactor_id": "", "run_id": "RUN-42", "seq_no": -1, "event_ts": "yesterday", "source": "laptop"}
+    with pytest.raises(MessageValidationError, match=field):
+        VALIDATOR.validate({**_parse_stage_dead_letter(messages), field: bad_values[field]})
+
+
+@pytest.mark.parametrize("field", ["message_id", "publish_ts", "schema_version"])
+def test_dead_letter_own_fields_are_not_nullable(messages: dict[str, dict], field: str) -> None:
+    with pytest.raises(MessageValidationError, match=field):
+        VALIDATOR.validate({**_parse_stage_dead_letter(messages), field: None})
+
+
+@pytest.mark.parametrize("message_type", ["process_sample", "oes_block", "run_start", "run_end", "run_outcome"])
+@pytest.mark.parametrize("field", _DEAD_LETTER_NULLABLE)
+def test_envelope_fields_not_nullable_outside_dead_letter(
+    messages: dict[str, dict], message_type: str, field: str
+) -> None:
+    with pytest.raises(MessageValidationError, match=field):
+        VALIDATOR.validate({**messages[message_type], field: None})
+
+
+@pytest.mark.parametrize("run_id", ["SYN-20261012-001", "SYN-20261012-0500-001", "SYN-20261012-050000-1"])
+def test_old_or_malformed_run_id_fails(messages: dict[str, dict], run_id: str) -> None:
+    with pytest.raises(MessageValidationError, match="run_id"):
+        VALIDATOR.validate({**messages["process_sample"], "run_id": run_id})

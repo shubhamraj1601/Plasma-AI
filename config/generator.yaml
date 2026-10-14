@@ -34,7 +34,7 @@ process:
     gas_temperature_k: 0.005
 
 outcomes:
-  noise_rel_sigma: 0.01    # applied once per run to each outcome (placeholder)
+  noise_rel_sigma: 0.01    # applied once per run to each outcome; for H2 purity it applies to the impurity (100 - purity) (placeholder)
 
 sweep:                     # placeholder ranges around the reference run; real ranges from professor's PDFs on Day 6 (Q1)
   power_kw: [1.5, 2.2]

@@ -63,6 +63,8 @@ python -m pytest -q                                                          # t
 
 Output goes to `out/<run_id>/process-ts.jsonl` and `out/<run_id>/oes-spectra.jsonl`. Each line is one Pub/Sub-shaped message, and the same seed gives identical output.
 
+OES mode `lines` (8 channels) is the default and the only mode used for streaming to Pub/Sub. `--oes-mode full` (2048 bins, about 14 MB/s as JSON) is for short local or batch tests only, pending the decision on spectrum size and storage (Q3, P-03).
+
 ## Status
 
 - [x] Message schemas v0 and synthetic generator v1 (local, no cloud)
