@@ -41,8 +41,9 @@ Synthetic runs also carry ground-truth plasma-state labels (electron density, el
 ```
 config/          generator settings (rates, noise, sweep ranges, placeholder coefficients)
 schemas/v0/      JSON Schema message contract
-plasma_ai/       Python package: config, messages, physics placeholder, OES model, sinks, validation
+plasma_ai/       Python package: config, messages, physics placeholder, OES model, disturbances, sinks (file, Pub/Sub), validation, emulator helper
 plasma_ai/generator/   synthetic generator CLI
+infra/           GCP setup, check and teardown scripts (PowerShell + gcloud); see infra/README.md
 tests/           pytest suite
 PROGRESS.md      development log
 ```
