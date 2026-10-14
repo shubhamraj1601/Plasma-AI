@@ -63,12 +63,28 @@ python -m pytest -q                                                          # t
 
 Output goes to `out/<run_id>/process-ts.jsonl` and `out/<run_id>/oes-spectra.jsonl`. Each line is one Pub/Sub-shaped message, and the same seed gives identical output.
 
+### Disturbances and Pub/Sub (local emulator)
+
+`config/generator.yaml` → `disturbances:` has four switches, all off by default: publish delay (`publish_ts − event_ts`), slow sensor drift, dropouts (readings sent as `null`) and missing messages (gaps in `seq_no`). `--no-noise` turns all of them off, so `--reference-run --no-noise` still reproduces slide 3 exactly.
+
+`--sink pubsub` publishes to the `topics:` from config with attributes `schema_version`, `message_type`, `run_id` and `source`, paced to real time (`--speed 10` = ten times faster, `--speed 0` = no pacing). With `PUBSUB_EMULATOR_HOST` set, it goes to the local emulator; for real Pub/Sub, unset it and set `pubsub.project_id`.
+
+```powershell
+gcloud beta emulators pubsub start --project=plasma-ai-local --host-port=localhost:8085   # terminal 1 (needs Java)
+$env:PUBSUB_EMULATOR_HOST = "localhost:8085"                                              # terminal 2
+python -m plasma_ai.emulator setup                                       # topics + <topic>-sub subscriptions
+python -m plasma_ai.generator --duration-s 10 --seed 42 --sink pubsub    # publish one 10 s run in real time
+python -m plasma_ai.emulator pull                                        # count what arrived per subscription
+python -m pytest -q                                                      # the emulator test runs when the variable is set
+```
+
 OES mode `lines` (8 channels) is the default and the only mode used for streaming to Pub/Sub. `--oes-mode full` (2048 bins, about 14 MB/s as JSON) is for short local or batch tests only, pending the decision on spectrum size and storage (Q3, P-03).
 
 ## Status
 
 - [x] Message schemas v0 and synthetic generator v1 (local, no cloud)
-- [ ] Cloud project and publishing to Pub/Sub
+- [x] Disturbances (delay, drift, dropouts, missing messages) and publishing to Pub/Sub (tested on the local emulator)
+- [ ] Cloud project (scripts in `infra/`, not run yet: waiting for billing)
 - [ ] Streaming pipeline (validation, features) and storage
 - [ ] Modelling (CNN-LSTM) and optimisation
 

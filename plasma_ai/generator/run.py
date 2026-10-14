@@ -91,7 +91,7 @@ def generate_run(
             elapsed_s = i / cfg.process.sampling_hz
             measured = true * (1 + sigma * rng.standard_normal(sigma.size)) if spec.noise else true
             payload: dict = {
-                name: impairments.drift(name, float(value), elapsed_s)
+                name: None if impairments.dropout(name) else impairments.drift(name, float(value), elapsed_s)
                 for name, value in zip(PROCESS_SIGNALS, measured)
             }
             payload["plasma_state"] = state.labels()
