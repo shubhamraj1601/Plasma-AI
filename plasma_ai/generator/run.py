@@ -6,7 +6,7 @@ import heapq
 import math
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
@@ -33,8 +33,8 @@ class RunSpec:
 
 
 def make_run_id(prefix: str, start: datetime, number: int) -> str:
-    """`{prefix}{YYYYMMDD}-{nnn}` with the run's UTC start date."""
-    return f"{prefix}{start:%Y%m%d}-{number:03d}"
+    """`{prefix}{YYYYMMDD}-{HHMMSS}-{nnn}` from the run's UTC start time; nnn = run number within one CLI call."""
+    return f"{prefix}{start.astimezone(timezone.utc):%Y%m%d-%H%M%S}-{number:03d}"
 
 
 def sample_setpoints(sweep: SweepConfig, rng: np.random.Generator) -> Setpoints:
@@ -91,7 +91,7 @@ def generate_run(
             elapsed_s = i / cfg.process.sampling_hz
             measured = true * (1 + sigma * rng.standard_normal(sigma.size)) if spec.noise else true
             payload: dict = {
-                name: impairments.drift(name, float(value), elapsed_s)
+                name: None if impairments.dropout(name) else impairments.drift(name, float(value), elapsed_s)
                 for name, value in zip(PROCESS_SIGNALS, measured)
             }
             payload["plasma_state"] = state.labels()
@@ -133,12 +133,16 @@ def generate_run(
 
 
 def _measured_outcomes(true: Outcomes, rel_sigma: float, rng: np.random.Generator, noise: bool) -> dict[str, float]:
-    """Apply one relative Gaussian draw per outcome; percentages stay within [0, 100]."""
+    """Apply one relative Gaussian draw per outcome; percentages stay within [0, 100].
+
+    For H2 purity the draw scales the impurity (100 - purity), not the purity itself.
+    """
     values = true.as_dict()
     if not noise:
         return values
     measured = {}
     for name, value in values.items():
-        v = value * (1 + rel_sigma * float(rng.standard_normal()))
+        factor = 1 + rel_sigma * float(rng.standard_normal())
+        v = 100 - (100 - value) * factor if name == "h2_purity_percent" else value * factor
         measured[name] = min(max(v, 0.0), 100.0) if name in _PERCENT_OUTCOMES else v
     return measured

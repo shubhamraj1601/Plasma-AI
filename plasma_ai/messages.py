@@ -53,6 +53,10 @@ class Record:
         """The run_id of the wrapped message."""
         return self.data["run_id"]
 
+    def data_bytes(self) -> bytes:
+        """The message alone (no attributes) as compact UTF-8 JSON: the Pub/Sub message body."""
+        return json.dumps(self.data, allow_nan=False, separators=(",", ":")).encode("utf-8")
+
     def to_json_line(self) -> str:
         """Serialise as one JSON line; raises ValueError on NaN or Infinity."""
         return json.dumps(

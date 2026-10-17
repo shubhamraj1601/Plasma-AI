@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/shubhamraj1601/Plasma-AI/schemas/v0/envelope.schema.json",
   "title": "Envelope v0.1",
-  "description": "Fields every message carries at the top level of data. Message schemas compose this with allOf and close the object with unevaluatedProperties: false.",
+  "description": "Fields every message carries at the top level of data. Message schemas compose this with allOf and close the object with unevaluatedProperties: false. dead_letter composes $defs/dead_letter_envelope instead, where five fields may be null.",
   "type": "object",
   "properties": {
     "schema_version": { "const": "0.1" },
@@ -15,7 +15,7 @@
     },
     "source": { "enum": ["synthetic_generator", "client_simulator", "published_batch"] },
     "reactor_id": { "type": "string", "minLength": 1 },
-    "run_id": { "type": "string", "pattern": "^[A-Za-z0-9_-]*[0-9]{8}-[0-9]{3,}$" },
+    "run_id": { "type": "string", "pattern": "^[A-Za-z0-9_-]*[0-9]{8}-[0-9]{6}-[0-9]{3,}$" },
     "seq_no": { "type": "integer", "minimum": 0 },
     "event_ts": { "$ref": "#/$defs/timestamp" },
     "publish_ts": { "$ref": "#/$defs/timestamp" }
@@ -30,6 +30,25 @@
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
     },
-    "nullable_number": { "type": ["number", "null"] }
+    "nullable_number": { "type": ["number", "null"] },
+    "dead_letter_envelope": {
+      "description": "Envelope for dead_letter only: reactor_id, run_id, seq_no, event_ts and source are copied from the original message when it parses, else null.",
+      "type": "object",
+      "properties": {
+        "schema_version": { "$ref": "#/properties/schema_version" },
+        "message_type": { "$ref": "#/properties/message_type" },
+        "message_id": { "$ref": "#/properties/message_id" },
+        "source": { "anyOf": [{ "$ref": "#/properties/source" }, { "type": "null" }] },
+        "reactor_id": { "anyOf": [{ "$ref": "#/properties/reactor_id" }, { "type": "null" }] },
+        "run_id": { "anyOf": [{ "$ref": "#/properties/run_id" }, { "type": "null" }] },
+        "seq_no": { "anyOf": [{ "$ref": "#/properties/seq_no" }, { "type": "null" }] },
+        "event_ts": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "publish_ts": { "$ref": "#/$defs/timestamp" }
+      },
+      "required": [
+        "schema_version", "message_type", "message_id", "source", "reactor_id",
+        "run_id", "seq_no", "event_ts", "publish_ts"
+      ]
+    }
   }
 }

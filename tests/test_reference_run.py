@@ -58,3 +58,18 @@ def test_outcomes(process_records: list[dict], field: str) -> None:
     (outcome,) = [r for r in process_records if r["message_type"] == "run_outcome"]
     assert _close(outcome[field], OUTCOMES[field])
 
+
+
+def test_h2_purity_noise_scales_the_impurity(tmp_path_factory: pytest.TempPathFactory) -> None:
+    # With noise on, sigma = 1 % of the 0.8-point impurity, so purity stays well inside (99.0, 99.4)
+    # and never clips at 100 (it did when the noise was 1 % of the purity itself).
+    out = run_generator(tmp_path_factory.mktemp("purity"), "--reference-run", "--runs", "20", "--duration-s", "1", "--seed", "9")
+    purities = [
+        r["data"]["h2_purity_percent"]
+        for d in run_dirs(out)
+        for r in read_lines(d / "process-ts.jsonl")
+        if r["data"]["message_type"] == "run_outcome"
+    ]
+    assert len(purities) == 20
+    assert all(99.0 < p < 99.4 for p in purities)
+    assert len(set(purities)) == 20

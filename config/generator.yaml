@@ -34,7 +34,7 @@ process:
     gas_temperature_k: 0.005
 
 outcomes:
-  noise_rel_sigma: 0.01    # applied once per run to each outcome (placeholder)
+  noise_rel_sigma: 0.01    # applied once per run to each outcome; for H2 purity it applies to the impurity (100 - purity) (placeholder)
 
 sweep:                     # placeholder ranges around the reference run; real ranges from professor's PDFs on Day 6 (Q1)
   power_kw: [1.5, 2.2]
@@ -124,6 +124,40 @@ oes:
     wavelength_range_nm: [400.0, 700.0]   # placeholder, Q3 open
     line_fwhm_nm: 0.5      # placeholder
     continuum_counts: 1500 # at T_gas = tgas_base, placeholder
+
+# Stream disturbances (Day 8). Each has its own on/off switch; all are off by
+# default, so the default output keeps the v1 contract (no gaps, no nulls,
+# publish_ts = event_ts). --no-noise also turns every disturbance off.
+# All values are placeholders, sized to be visible in short demo runs.
+disturbances:
+  publish_delay:           # publish_ts - event_ts = min_ms + Exponential(mean_extra_ms), per message
+    enabled: false
+    min_ms: 50
+    mean_extra_ms: 150
+  drift:                   # measured * (1 + rel_per_hour * hours since run start); sign = direction
+    enabled: false
+    rel_per_hour:          # only the signals listed here drift
+      pressure_kpa: 0.3
+      gas_temperature_k: -0.2
+  dropout:                 # chance per process_sample that a reading is null
+    enabled: false
+    null_prob:             # only the signals listed here drop out
+      power_kw: 0.01
+      reflected_power_w: 0.02
+      pressure_kpa: 0.01
+      gas_temperature_k: 0.02
+  missing_messages:        # chance a whole message is lost; its seq_no is still used, leaving a gap
+    enabled: false
+    prob:                  # process_sample and oes_block only (run events are never lost)
+      process_sample: 0.01
+      oes_block: 0.01
+
+# Pub/Sub sink (--sink pubsub). With PUBSUB_EMULATOR_HOST set, the client talks
+# to the local emulator; unset it and set project_id to the real project to use
+# real Pub/Sub. Topic names come from `topics` above.
+pubsub:
+  project_id: plasma-ai-local   # any id works on the emulator; real GCP project id later (infra/gcp.psd1)
+  speed: 1.0               # 1 = real time, 10 = ten times faster, 0 = as fast as possible
 
 reactor:
   volume_m3: null          # Q9 open; needed for P_d and tau

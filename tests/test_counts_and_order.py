@@ -74,8 +74,9 @@ def test_no_nan_or_infinity_text(run_files: dict[str, list[dict]], tmp_path: Pat
 def test_consecutive_runs_follow_each_other(tmp_path: Path) -> None:
     out = run_generator(tmp_path, "--runs", "2", "--duration-s", "2", "--seed", "5")
     first, second = (read_lines(d / "process-ts.jsonl") for d in run_dirs(out))
-    assert first[0]["data"]["run_id"] == "SYN-20261012-001"
-    assert second[0]["data"]["run_id"] == "SYN-20261012-002"
+    # run_id = prefix + UTC start date and time + run number; run 2 starts 2 s + 5 s gap later.
+    assert first[0]["data"]["run_id"] == "SYN-20261012-050000-001"
+    assert second[0]["data"]["run_id"] == "SYN-20261012-050007-002"
     first_end = parse_ts(first[-2]["data"]["event_ts"])
     second_start = parse_ts(second[0]["data"]["event_ts"])
     assert second_start - first_end == timedelta(seconds=5)

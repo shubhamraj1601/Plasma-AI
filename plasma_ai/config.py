@@ -27,6 +27,7 @@ PROCESS_SIGNALS = (
     "gas_temperature_k",
 )
 OES_MODES = ("lines", "full")
+DROPPABLE_MESSAGE_TYPES = ("process_sample", "oes_block")
 OES_DRIVERS = ("h_beta", "c2", "continuum")
 
 
@@ -199,6 +200,55 @@ class OesConfig:
 
 
 @dataclass(frozen=True)
+class PublishDelayConfig:
+    """publish_ts - event_ts = min_ms + Exponential(mean_extra_ms)."""
+
+    enabled: bool
+    min_ms: float
+    mean_extra_ms: float
+
+
+@dataclass(frozen=True)
+class DriftConfig:
+    """Linear relative drift per hour since run start, for the listed signals."""
+
+    enabled: bool
+    rel_per_hour: dict[str, float]
+
+
+@dataclass(frozen=True)
+class DropoutConfig:
+    """Chance per process_sample that each listed reading is null."""
+
+    enabled: bool
+    null_prob: dict[str, float]
+
+
+@dataclass(frozen=True)
+class MissingMessagesConfig:
+    """Chance per message that it is lost (its seq_no is still used)."""
+
+    enabled: bool
+    prob: dict[str, float]
+
+
+@dataclass(frozen=True)
+class DisturbancesConfig:
+    """Day 8 stream disturbances, each with its own switch."""
+
+    publish_delay: PublishDelayConfig
+    drift: DriftConfig
+    dropout: DropoutConfig
+    missing_messages: MissingMessagesConfig
+
+
+@dataclass(frozen=True)
+class PubSubConfig:
+    project_id: str
+    speed: float
+
+
+@dataclass(frozen=True)
 class ReactorConfig:
     volume_m3: float | None
 
@@ -223,6 +273,8 @@ class GeneratorConfig:
     reference_run: Setpoints
     physics: PhysicsConfig
     oes: OesConfig
+    disturbances: DisturbancesConfig
+    pubsub: PubSubConfig
     reactor: ReactorConfig
     window: WindowConfig
 
@@ -280,6 +332,10 @@ def _build(tp: Any, value: Any, where: str) -> Any:
         if not isinstance(value, dict):
             raise ConfigError(f"{where}: expected a mapping, got {value!r}")
         return {str(k): _build(item, v, f"{where}.{k}") for k, v in value.items()}
+    if tp is bool:
+        if not isinstance(value, bool):
+            raise ConfigError(f"{where}: expected true or false, got {value!r}")
+        return value
     if tp is float:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ConfigError(f"{where}: expected a finite number, got {value!r}")
@@ -346,6 +402,25 @@ def _check(cfg: GeneratorConfig) -> None:
     need(0 < wl.low < wl.high, "oes.full.wavelength_range_nm must satisfy 0 < low < high")
     need(oes.full.line_fwhm_nm > 0, "oes.full.line_fwhm_nm must be > 0")
     need(oes.full.continuum_counts >= 0, "oes.full.continuum_counts must be >= 0")
+
+    dist = cfg.disturbances
+    need(dist.publish_delay.min_ms >= 0, "disturbances.publish_delay.min_ms must be >= 0")
+    need(dist.publish_delay.mean_extra_ms >= 0, "disturbances.publish_delay.mean_extra_ms must be >= 0")
+    unknown = sorted(set(dist.drift.rel_per_hour) - set(PROCESS_SIGNALS))
+    need(not unknown, f"disturbances.drift.rel_per_hour has unknown signal(s) {unknown}; allowed {list(PROCESS_SIGNALS)}")
+    unknown = sorted(set(dist.dropout.null_prob) - set(PROCESS_SIGNALS))
+    need(not unknown, f"disturbances.dropout.null_prob has unknown signal(s) {unknown}; allowed {list(PROCESS_SIGNALS)}")
+    need(all(0 <= p <= 1 for p in dist.dropout.null_prob.values()), "disturbances.dropout.null_prob values must be in [0, 1]")
+    unknown = sorted(set(dist.missing_messages.prob) - set(DROPPABLE_MESSAGE_TYPES))
+    need(
+        not unknown,
+        f"disturbances.missing_messages.prob has unknown type(s) {unknown}; allowed {list(DROPPABLE_MESSAGE_TYPES)}",
+    )
+    need(
+        all(0 <= p <= 1 for p in dist.missing_messages.prob.values()),
+        "disturbances.missing_messages.prob values must be in [0, 1]",
+    )
+    need(cfg.pubsub.speed >= 0, "pubsub.speed must be >= 0 (0 = as fast as possible)")
 
     need(cfg.reactor.volume_m3 is None or cfg.reactor.volume_m3 > 0, "reactor.volume_m3 must be null or > 0")
     need(cfg.window.samples >= 1, "window.samples must be >= 1")
