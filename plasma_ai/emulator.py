@@ -4,7 +4,7 @@
     python -m plasma_ai.emulator pull --max 500   # pull, ack and count what arrived
 
 It refuses to run unless PUBSUB_EMULATOR_HOST is set, so it never touches real
-GCP. On real GCP the same topics and subscriptions come from infra/setup.ps1.
+GCP. On real GCP the same topics and subscriptions come from infra/terraform/pubsub.tf.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ EMULATOR_ENV = "PUBSUB_EMULATOR_HOST"
 
 
 def subscription_name(topic: str) -> str:
-    """One subscription per topic, named <topic>-sub (same rule as infra/setup.ps1)."""
+    """One subscription per topic, named <topic>-sub (same rule as infra/terraform/pubsub.tf)."""
     return f"{topic}-sub"
 
 

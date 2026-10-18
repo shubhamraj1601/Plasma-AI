@@ -156,7 +156,7 @@ disturbances:
 # to the local emulator; unset it and set project_id to the real project to use
 # real Pub/Sub. Topic names come from `topics` above.
 pubsub:
-  project_id: plasma-ai-local   # any id works on the emulator; real GCP project id later (infra/gcp.psd1)
+  project_id: plasma-ai-local   # any id works on the emulator; real GCP project id later (same as project_id in infra/terraform/terraform.tfvars)
   speed: 1.0               # 1 = real time, 10 = ten times faster, 0 = as fast as possible
 
 reactor:

@@ -43,7 +43,7 @@ config/          generator settings (rates, noise, sweep ranges, placeholder coe
 schemas/v0/      JSON Schema message contract
 plasma_ai/       Python package: config, messages, physics placeholder, OES model, disturbances, sinks (file, Pub/Sub), validation, emulator helper
 plasma_ai/generator/   synthetic generator CLI
-infra/           GCP setup, check and teardown scripts (PowerShell + gcloud); see infra/README.md
+infra/           GCP foundation as Terraform (infra/terraform/); see infra/README.md
 tests/           pytest suite
 PROGRESS.md      development log
 ```
@@ -85,7 +85,7 @@ OES mode `lines` (8 channels) is the default and the only mode used for streamin
 
 - [x] Message schemas v0 and synthetic generator v1 (local, no cloud)
 - [x] Disturbances (delay, drift, dropouts, missing messages) and publishing to Pub/Sub (tested on the local emulator)
-- [ ] Cloud project (scripts in `infra/`, not run yet: waiting for billing)
+- [ ] Cloud project (Terraform in `infra/terraform/`, not applied yet: waiting for billing)
 - [ ] Streaming pipeline (validation, features) and storage
 - [ ] Modelling (CNN-LSTM) and optimisation
 
