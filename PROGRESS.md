@@ -1,17 +1,100 @@
 # PROGRESS: Plasma-AI
 
-## Status (updated 2026-10-14)
+## Status (updated 2026-10-17)
 
 | Story | Plan day(s) | State | Notes |
 |---|---|---|---|
-| ST3 GCP foundation | 2 | Blocked | `infra/` setup, check and teardown scripts written and dry-run tested; nothing run on GCP. Waiting for Q2 (billing), project id and billing account. |
+| ST3 GCP foundation | 2 | Blocked | Terraform ready, not applied. `infra/terraform/` validates; nothing run on GCP. Waiting for Q2 (billing), project id and billing account. |
 | ST4 Synthetic generator | 6–8 | In progress | v1 done; PM fixes (Part A) applied. Day 8 local half done: disturbances, plus `--sink pubsub` tested on the local emulator. Day 6 (real ranges) not started; Day 8 on real Pub/Sub waits on ST3. |
 | ST5 Stream preprocessing | 9–10, 17 | Not started | `dead_letter` schema allows null copied fields (Part A). |
-| ST6 Storage and aggregation | 11–13 | Not started | Bucket and `plasma_d1` dataset are in `infra/setup.ps1` (not run). |
+| ST6 Storage and aggregation | 11–13 | Not started | Bucket and `plasma_d1` dataset are in `infra/terraform/` (not applied). Tables wait for the Day 11 schema freeze. |
+
+---
+
+## 2026-10-17: Day 2 / ST3: GCP foundation as Terraform (not applied)
+
+**State:** Blocked. Terraform written and validated locally and in CI; **nothing applied to GCP** (billing waits on the mentor, Q2).
+**Commit(s):** 09fb0e2 ST3: add Terraform config for the GCP foundation (not applied) · bb402dc ST3: remove the 14 Oct PowerShell scripts; document the Terraform workflow · 0d5719e Add CI: pytest plus terraform fmt and validate · (this entry) Add PROGRESS entry for 17 Oct
+
+### Built
+- `infra/terraform/` replaces the 14 Oct PowerShell scripts, with the same resources and settings:
+  - `versions.tf`, `providers.tf`: Terraform ≥ 1.5, `hashicorp/google ~> 8.0` (8.7.0 in the committed `.terraform.lock.hcl`, hashes for Windows, Linux and macOS). `user_project_override = true` and `billing_project = var.project_id`, so the Billing Budgets API has a quota project with Raj's user credentials.
+  - `variables.tf`: `project_id`, `billing_account` (both required, format-checked), `region` (`us-central1`), `budget_usd` (200), `alert_thresholds` (`[0.5, 0.8, 1.0]`), `alert_email` (optional, empty).
+  - `apis.tf`: the same 11 APIs, `google_project_service` with `disable_on_destroy = false`.
+  - `iam.tf`: `sa-generator` (`pubsub.publisher`) and `sa-dataflow` (`dataflow.worker`, `pubsub.subscriber`, `pubsub.publisher`, `bigquery.dataEditor`, `bigquery.jobUser`, `storage.objectAdmin`), project level, `google_project_iam_member` only. No keys.
+  - `budget.tf`: `plasma-ai-budget`, `budget_usd` USD on this project only, one `CURRENT_SPEND` threshold rule per entry in `alert_thresholds`. With `alert_email` set, also a Monitoring email channel `plasma-ai-budget-email`, attached to the budget.
+  - `pubsub.tf`: topics `process-ts`, `oes-spectra`, `dead-letter`, each with a `<topic>-sub` subscription that never expires.
+  - `storage.tf`: `<project_id>-oes-raw`, STANDARD, uniform access, public access prevention enforced, `force_destroy = true`, delete objects under `oes_raw/` after 30 days.
+  - `bigquery.tf`: dataset `plasma_d1` in `var.region`, no tables, with a commented Day 11 hook.
+  - `outputs.tf`: service account emails, topic and subscription names, bucket name, dataset id.
+  - `terraform.tfvars.example`: placeholders. `terraform.tfvars` is git-ignored.
+  - State: local backend. `infra/README.md` says how to move it to a GCS bucket later.
+- Deleted: `infra/setup.ps1`, `teardown.ps1`, `check.ps1`, `_common.ps1`, `gcp.psd1` (Raj approved).
+- `infra/README.md` rewritten: step 0 by hand, then `init` / `fmt -check` / `validate` / `plan` / `apply` / `destroy`; cost per piece; alerts only notify; project-level grants are a hardening step.
+- `.gitignore`: `.terraform/`, `*.tfstate`, `*.tfstate.*`, `terraform.tfvars`, `crash.log`.
+- `.github/workflows/ci.yml`: on push and PR. Job `pytest` (Python 3.11, `python -m pytest -q`) and job `terraform` (1.16.6: `fmt -check -recursive`, `init -backend=false`, `validate`). No GCP credentials.
+- References to the old scripts updated in `README.md`, `plasma_ai/emulator.py` (docstrings) and `config/generator.yaml` (comment).
+
+### How to run
+```powershell
+cd infra\terraform
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
+cd ..\..
+python -m pytest -q
+```
+Expect no output from `fmt`, `Success! The configuration is valid.` from `validate`, and `137 passed, 1 skipped` from pytest. After Q2: README step 0, copy `terraform.tfvars.example` to `terraform.tfvars`, then `terraform init`, `plan -out tfplan`, `apply tfplan`.
+
+### Tests
+- Local (Windows 11, Terraform 1.16.6, Python 3.11):
+  - `terraform fmt -check -recursive`: no output, exit 0.
+  - `terraform init -backend=false`: installed `hashicorp/google v8.7.0 (signed by HashiCorp)`; "Terraform has been successfully initialized!"
+  - `terraform validate`: `Success! The configuration is valid.`
+  - `python -m pytest -q`: **137 passed, 1 skipped** in 7.45 s.
+- CI on `feature_ai` at 0d5719e (run 39106574084, push): **green**. Job `pytest` passed (19 s); job `terraform` passed `fmt -check`, `init -backend=false` and `validate` (8 s). The per-test count is in the job log, which needs a GitHub login to read, so it was not checked.
+- **Not run:** `terraform plan`, `apply`, `destroy` (by instruction; they need GCP and billing). So the resource count (29, or 30 with `alert_email`) and the absence of diffs after apply are untested.
+
+### Assumptions made in this session
+- **Install (Raj approved):** Terraform 1.16.6 via `winget install Hashicorp.Terraform`. New terminals pick it up on PATH.
+- **Provider major 8** is what `terraform init` found (8.7.0, released 13 Oct). `~> 8.0` allows 8.x minor updates when the lock file is upgraded.
+- **Budget filter** uses `projects/<project number>`, read with a `google_project` data source; the API stores the number, so the id would show a diff on every plan.
+- **Dataset** has `delete_contents_on_destroy = true`, so `destroy` removes it with any tables, as the 14 Oct teardown (`bq rm -r -f`) did.
+- **Step 0 order:** `set-quota-project` runs after `projects create`, because the project must exist first.
+- Topic names, the bucket prefix and retention, and the budget name are `locals`, not variables: they change only with a PM decision.
+
+### Deviations from CLAUDE.md
+- **ST3 layout follows the 17 Oct brief, not 6A Part B:** Terraform in `infra/terraform/` instead of `config/gcp.yaml` + `00_`…`04_` PowerShell scripts. CLAUDE.md is unchanged, by instruction.
+- **ST3 "done when" is not met:** nothing was applied, by instruction (Q2).
+- The 14 Oct entry below still names the deleted scripts. It is kept as written, because entries are never deleted; it now carries a "superseded" note.
+
+### Open questions / blockers
+- **Q2 billing approval** blocks `terraform plan` and `apply`. (mentor)
+- Raj to provide: `project_id`, `billing_account` and, optionally, `alert_email`. (Raj)
+- Still not verified: whether `sa-dataflow` needs more than its six roles. First real test: the Day 12 Dataflow deploy. (Claude Code, Day 12)
+
+### For PM: where the Terraform differs from the 14 Oct scripts
+- **Same:** every name (APIs, `sa-generator`, `sa-dataflow`, roles, `plasma-ai-budget`, `plasma-ai-budget-email`, topics, `<topic>-sub`, `<project>-oes-raw`, `plasma_d1`) and every setting (region, 200 USD, 50/80/100 % of actual spend, no-expiry subscriptions, STANDARD + uniform access + public access prevention, 30-day rule on `oes_raw/`). No extra GCP resources. The only addition is a read-only lookup of the project number.
+- **Budget changes** are now updated in place by `apply`; before, the script skipped an existing budget and you had to delete and recreate it.
+- **No partial runs by step.** The 14 Oct note said "run only APIs, service accounts and budget now, the rest later" with `-Steps`. With Terraform that needs `-target` (for example `terraform apply -target=google_billing_budget.project`), which Terraform recommends only as an exception. If the PM wants topics, bucket and dataset on Days 8 and 11 instead, the cleaner way is to apply everything now (all free while idle) or to add a switch variable; say which.
+- **Destroy** asks for `yes` instead of the project id. It never disables APIs (the old `-DisableApis` option is gone).
+- **No separate check script.** `terraform plan` showing "No changes" after `apply` is the check; `terraform output` lists what exists. It does not check login or the billing link up front; `plan` fails if they are missing.
+- **New one-time step 0 command:** `gcloud auth application-default set-quota-project <project_id>`.
+
+### Next
+- **Raj, after Q2:**
+  1. README step 0: log in, create the project, link billing, set the ADC quota project.
+  2. Copy `infra/terraform/terraform.tfvars.example` to `terraform.tfvars` and fill it in; set `pubsub.project_id` in `config/generator.yaml`.
+  3. In `infra\terraform`: `terraform init`, `terraform plan -out tfplan`, paste the plan, then `terraform apply tfplan` and paste `terraform output`.
+  4. Then Day 8's remote half: `python -m plasma_ai.generator --sink pubsub` against real Pub/Sub, with `PUBSUB_EMULATOR_HOST` unset.
+- Raj: review and merge `feature_ai` → `main` by PR.
+- Plan: Day 5 (freeze schema v0.1, PM chat), Day 6 (parameter ranges), then Day 9 (Beam v1 on the local runner).
 
 ---
 
 ## 2026-10-14: Day 2 / ST3 (scripts only) and Day 8 / ST4 (local half), plus Part A fixes
+
+> **Superseded 17 Oct (ST3 only):** the PowerShell scripts in this entry were deleted and replaced by Terraform in `infra/terraform/`. See the 17 Oct entry. The ST4 and Part A parts still hold.
 
 **State:** Partly done. Part A (PM fixes) and Day 8 local half: done. ST3: scripts written and dry-run tested, **not run on GCP** (billing waits on the mentor, Q2).
 **Commit(s):** 2e1a850 Update CLAUDE.md brief (14 Oct: Part A and ST3 Part B) · ecf96e9 ST4: apply PM decisions on run_id, dead_letter nulls and H2 purity noise · af9dfe0 ST4: add stream disturbances and Pub/Sub sink with emulator helper · 38e305f ST3: add GCP setup, check and teardown scripts (not run; billing pending) · (this entry) Add PROGRESS entry for 14 Oct
