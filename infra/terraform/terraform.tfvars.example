@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. No secrets go here or anywhere in the repo.
+project_id      = "REPLACE-ME-project-id" # e.g. plasma-ai-d1 (a new, dedicated project)
+billing_account = "000000-000000-000000"  # gcloud billing accounts list
+
+# Defaults from the plan; change only with a PM decision.
+# region           = "us-central1"   # P-07 (pending)
+# budget_usd       = 200             # Q2 assumption
+# alert_thresholds = [0.5, 0.8, 1.0] # share of the budget, actual spend
+
+# Optional extra recipient for budget mail (billing admins always get it).
+# alert_email = "you@example.com"

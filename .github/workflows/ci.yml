@@ -1,0 +1,37 @@
+# Tests and Terraform checks on every push and PR. No GCP credentials here:
+# Terraform is only formatted and validated, never planned or applied.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      # PUBSUB_EMULATOR_HOST is not set, so the emulator test skips itself.
+      - run: python -m pytest -q
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.6"
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+        working-directory: infra/terraform
+      - run: terraform validate
+        working-directory: infra/terraform
