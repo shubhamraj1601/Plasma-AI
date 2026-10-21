@@ -29,7 +29,7 @@
   - `outputs.tf`: service account emails, topic and subscription names, bucket name, dataset id.
   - `terraform.tfvars.example`: placeholders. `terraform.tfvars` is git-ignored.
   - State: local backend. `infra/README.md` says how to move it to a GCS bucket later.
-- Deleted: `infra/setup.ps1`, `teardown.ps1`, `check.ps1`, `_common.ps1`, `gcp.psd1` (Raj approved).
+- Deleted: the five 14 Oct PowerShell files in `infra/` (setup, teardown and check scripts, their shared helper and their settings file; added in 38e305f). Raj approved.
 - `infra/README.md` rewritten: step 0 by hand, then `init` / `fmt -check` / `validate` / `plan` / `apply` / `destroy`; cost per piece; alerts only notify; project-level grants are a hardening step.
 - `.gitignore`: `.terraform/`, `*.tfstate`, `*.tfstate.*`, `terraform.tfvars`, `crash.log`.
 - `.github/workflows/ci.yml`: on push and PR. Job `pytest` (Python 3.11, `python -m pytest -q`) and job `terraform` (1.16.6: `fmt -check -recursive`, `init -backend=false`, `validate`). No GCP credentials.
@@ -66,7 +66,7 @@ Expect no output from `fmt`, `Success! The configuration is valid.` from `valida
 ### Deviations from CLAUDE.md
 - **ST3 layout follows the 17 Oct brief, not 6A Part B:** Terraform in `infra/terraform/` instead of `config/gcp.yaml` + `00_`…`04_` PowerShell scripts. CLAUDE.md is unchanged, by instruction.
 - **ST3 "done when" is not met:** nothing was applied, by instruction (Q2).
-- The 14 Oct entry below still names the deleted scripts. It is kept as written, because entries are never deleted; it now carries a "superseded" note.
+- **The 14 Oct entry below was edited on 21 Oct, at Raj's request:** the names of the deleted scripts were replaced with generic wording, so nothing in the repo points at files that no longer exist. Its facts are unchanged and the entry is not deleted; the original wording is in commit 4e42257.
 
 ### Open questions / blockers
 - **Q2 billing approval** blocks `terraform plan` and `apply`. (mentor)
@@ -94,7 +94,7 @@ Expect no output from `fmt`, `Success! The configuration is valid.` from `valida
 
 ## 2026-10-14: Day 2 / ST3 (scripts only) and Day 8 / ST4 (local half), plus Part A fixes
 
-> **Superseded 17 Oct (ST3 only):** the PowerShell scripts in this entry were deleted and replaced by Terraform in `infra/terraform/`. See the 17 Oct entry. The ST4 and Part A parts still hold.
+> **Superseded 17 Oct (ST3 only):** the PowerShell scripts in this entry were deleted and replaced by Terraform in `infra/terraform/`. See the 17 Oct entry. Their file names were taken out of this entry on 21 Oct; the original wording is in commit 4e42257. The ST4 and Part A parts still hold.
 
 **State:** Partly done. Part A (PM fixes) and Day 8 local half: done. ST3: scripts written and dry-run tested, **not run on GCP** (billing waits on the mentor, Q2).
 **Commit(s):** 2e1a850 Update CLAUDE.md brief (14 Oct: Part A and ST3 Part B) · ecf96e9 ST4: apply PM decisions on run_id, dead_letter nulls and H2 purity noise · af9dfe0 ST4: add stream disturbances and Pub/Sub sink with emulator helper · 38e305f ST3: add GCP setup, check and teardown scripts (not run; billing pending) · (this entry) Add PROGRESS entry for 14 Oct
@@ -127,19 +127,19 @@ Expect no output from `fmt`, `Success! The configuration is valid.` from `valida
   - `tests/test_pubsub_sink.py` (11): uses a fake client.
   - `tests/test_pubsub_emulator.py` (1): skipped unless `PUBSUB_EMULATOR_HOST` is set.
 
-**Task 1, Day 2 / ST3, scripts only (`infra/`):**
-- `infra/gcp.psd1`: all settings. `PROJECT_ID`, `BILLING_ACCOUNT` and optional `ALERT_EMAIL` are placeholders. `REGION=us-central1` and `BUDGET_USD=200` come from the plan.
-- `infra/setup.ps1 [-DryRun] [-Steps ...]`: runs six idempotent steps.
+**Task 1, Day 2 / ST3, scripts only (`infra/`; removed 17 Oct):**
+- A PowerShell settings file: all settings. `PROJECT_ID`, `BILLING_ACCOUNT` and optional `ALERT_EMAIL` were placeholders. `REGION=us-central1` and `BUDGET_USD=200` came from the plan.
+- A setup script (with dry-run and per-step options) that ran six idempotent steps:
   1. APIs: 11 (Pub/Sub, Dataflow, BigQuery, Storage, Compute, IAM, Billing Budgets, Cloud Billing, Resource Manager, Logging, Monitoring).
   2. Service accounts: `sa-generator` (pubsub.publisher) and `sa-dataflow` (dataflow.worker, pubsub.subscriber, pubsub.publisher, bigquery.dataEditor, bigquery.jobUser, storage.objectAdmin), roles at project level.
   3. Budget: 200 USD with alerts at 50/80/100 % of actual spend.
   4. Topics `process-ts`, `oes-spectra`, `dead-letter`, each with a `<topic>-sub` subscription.
   5. Bucket `<project>-oes-raw` with a 30-day delete rule on `oes_raw/`.
   6. BigQuery dataset `plasma_d1`, with no tables.
-- `infra/teardown.ps1 [-DryRun] [-Steps ...] [-DisableApis] [-Force]`: removes all of the above in reverse order. It asks you to type the project id first.
-- `infra/check.ps1 [-DryRun]`: read-only. Prints `[OK]`/`[MISSING]` per item and exits 0 only when everything exists.
-- `infra/_common.ps1`: shared helpers.
-- `infra/README.md`: step order, cost per step, what Raj fills in, and how to undo. It says that budget alerts only notify and that project-level grants are a hardening step.
+- A teardown script (dry-run, per-step, optional API disabling, no-prompt options) that removed all of the above in reverse order. It asked you to type the project id first.
+- A read-only check script that printed `[OK]`/`[MISSING]` per item and exited 0 only when everything existed.
+- A shared helper file for the three scripts.
+- `infra/README.md` (since rewritten for Terraform): step order, cost per step, what Raj fills in, and how to undo. It says that budget alerts only notify and that project-level grants are a hardening step.
 
 ### How to run
 ```powershell
@@ -152,9 +152,8 @@ python -m plasma_ai.emulator setup
 python -m plasma_ai.generator --duration-s 10 --seed 42 --sink pubsub      # real time; --speed 0 = no pacing
 python -m plasma_ai.emulator pull
 python -m pytest -q
-# GCP scripts, print only (nothing runs)
-.\infra\setup.ps1 -DryRun ; .\infra\teardown.ps1 -DryRun ; .\infra\check.ps1 -DryRun
 ```
+(The dry-run commands for the GCP scripts are gone with the scripts; see the 17 Oct entry for the Terraform commands.)
 A 10 s run without disturbances gives 100 `oes_block` and 103 `process-ts` messages, and 0 dead letters. In this session a 3 s run pulled back exactly 30, 33 and 0. With disturbances on, counts drop by the lost messages, and the summary line lists them (`disturbances: missing.oes_block=3 ... null.power_kw=2`).
 
 ### Tests
@@ -165,9 +164,9 @@ A 10 s run without disturbances gives 100 `oes_block` and 103 `process-ts` messa
   - 60 s at `--speed 20` took about 3 s of stream: 593 `oes_block` and 594 `process-ts` messages were published and all of them pulled back.
 - DoD 1: a 60 s file run takes 1.6 s. DoD 4: `--reference-run --no-noise` gives purity 99.20 and yield 68.00 exactly.
 - ST3 scripts:
-  - `setup.ps1 -DryRun`, `teardown.ps1 -DryRun -DisableApis` and `check.ps1 -DryRun` ran clean on Windows PowerShell 5.1.
-  - `check.ps1` without `-DryRun` ran its local checks: gcloud found, not logged in, placeholders not filled. It made no GCP call.
-  - `setup.ps1` without `-DryRun` refuses while placeholders remain.
+  - The setup, teardown (with API disabling) and check scripts ran clean in dry-run mode on Windows PowerShell 5.1.
+  - The check script without dry-run ran its local checks: gcloud found, not logged in, placeholders not filled. It made no GCP call.
+  - The setup script without dry-run refused while placeholders remained.
   - Every gcloud flag used was checked against the local `gcloud ... --help`.
   - **No command has run against GCP**, so idempotency on real resources is untested.
 
@@ -188,9 +187,9 @@ A 10 s run without disturbances gives 100 `oes_block` and 103 `process-ts` messa
 - **`publish_ts` is the simulated value** (`event_ts` + delay), not the wall-clock send time. With `--speed` ≠ 1 or a past `--start-ts`, the two differ. Pub/Sub's own `publish_time` holds the real arrival time.
 - The Pub/Sub sink publishes in `publish_ts` order. Out-of-order arrival (by `event_ts`) therefore comes from delay jitter; there is no separate out-of-order switch. The file sink keeps `event_ts` order.
 - No ordering keys and no batching settings: client defaults.
-- `pubsub.project_id` lives in `config/generator.yaml`, so the project id is set in two files (that one and `infra/gcp.psd1`).
+- `pubsub.project_id` lives in `config/generator.yaml`, so the project id is set in two files (that one and the ST3 settings file; since 17 Oct, `infra/terraform/terraform.tfvars`).
 - **dead_letter schema:** done with a `$defs/dead_letter_envelope` in `envelope.schema.json` that reuses the envelope field rules, because `allOf` cannot loosen the strict envelope.
-- **ST3 config is `infra/gcp.psd1`**, a PowerShell data file read with `Import-PowerShellDataFile`. Windows PowerShell 5.1 has no YAML parser, and the brief allowed "gcp.env or similar". Keys use the brief's names.
+- **ST3 config was a PowerShell data file** in `infra/`, read with `Import-PowerShellDataFile`. Windows PowerShell 5.1 has no YAML parser, and the brief allowed "gcp.env or similar". Keys use the brief's names.
 - **APIs:** the union of the brief's list and CLAUDE.md's list, plus `cloudbilling` (needed to read the billing link).
 - **Budget mail:** goes to the billing account's admins and users by default. `ALERT_EMAIL`, if set, adds a Cloud Monitoring email channel.
 - **Subscriptions:** `--expiration-period=never` (the default is 31 idle days); other settings are defaults. The bucket is STANDARD storage with uniform access and public access prevention. The dataset is in `us-central1`.
@@ -198,13 +197,13 @@ A 10 s run without disturbances gives 100 `oes_block` and 103 `process-ts` messa
 - **Not automated:** creating the project and linking billing (README step 0, by hand).
 
 ### Deviations from CLAUDE.md
-- **ST3 layout follows the session brief, not 6A Part B:** `setup.ps1` / `teardown.ps1` / `check.ps1` + `infra/gcp.psd1`, instead of `config/gcp.yaml` + `00_`…`04_` scripts.
-- **`setup.ps1` also creates resources CLAUDE.md assigned to later days** (as the brief asked): topics and subscriptions (Day 8), the bucket and the dataset (Day 11). Nothing was run.
+- **ST3 layout followed the session brief, not 6A Part B:** setup, teardown and check scripts plus one settings file in `infra/`, instead of `config/gcp.yaml` + `00_`…`04_` scripts.
+- **The setup script also created resources CLAUDE.md assigned to later days** (as the brief asked): topics and subscriptions (Day 8), the bucket and the dataset (Day 11). Nothing was run.
 - **ST3 "done when" is not met:** no command was run against GCP, by instruction (Q2).
 - Day 8 (local half) was done before Days 5–6, at Raj's request.
 
 ### Open questions / blockers
-- **Q2 billing approval** blocks running `infra/setup.ps1`. (mentor)
+- **Q2 billing approval** blocks running the ST3 setup script. (mentor)
 - Raj to provide: `PROJECT_ID`, `BILLING_ACCOUNT` and, optionally, `ALERT_EMAIL`. (Raj)
 - Not verified: whether `sa-dataflow` needs more than its six roles (for example `roles/pubsub.viewer` for subscription metadata). The first real test is the Day 12 Dataflow deploy. (Claude Code, Day 12)
 
@@ -212,13 +211,13 @@ A 10 s run without disturbances gives 100 `oes_block` and 103 `process-ts` messa
 - **Disturbances for demos:** they are off by default. Proposal: turn on `publish_delay`, `dropout` and `missing_messages` for the Day 13 end-to-end demo, so Beam's null handling, gap detection and late-data windowing are shown. This is a config change only.
 - **Drift and dropout magnitudes** (pressure +30 %/h, T_gas −20 %/h, 1–2 % nulls, 1 % lost messages) are demo placeholders. Real sensor drift is far smaller. Replace them once the client gives sensor specs.
 - **ST2 note on timestamps:** Beam should window on `event_ts`. `publish_ts` is the producer's claim, and Pub/Sub `publish_time` is the real arrival. Proposal: add one line to ST2 saying so.
-- **ST3 scope moved earlier:** topics, subscriptions, bucket and dataset are now in the ST3 setup script (not run). If the PM prefers creating them on Days 8 and 11, use `setup.ps1 -Steps apis,serviceaccounts,budget` now and the rest later; no code change is needed.
+- **ST3 scope moved earlier:** topics, subscriptions, bucket and dataset are now in the ST3 setup script (not run). If the PM prefers creating them on Days 8 and 11, run only the setup script's APIs, service accounts and budget steps now and the rest later; no code change is needed. (Superseded: see the 17 Oct "For PM", "No partial runs by step".)
 
 ### Next
 - **Raj, after Q2:**
   1. README step 0: `gcloud auth login`, ADC login, create the project, link billing.
-  2. Fill in `infra/gcp.psd1` and `pubsub.project_id` in `config/generator.yaml`.
-  3. Run `.\infra\check.ps1` → `.\infra\setup.ps1 -DryRun` → `.\infra\setup.ps1` → `.\infra\check.ps1`, and paste the output.
+  2. Fill in the ST3 settings file and `pubsub.project_id` in `config/generator.yaml`.
+  3. Run the check script, the setup script as a dry run, the setup script, then the check script again, and paste the output. (Steps 2 and 3 are superseded by the 17 Oct "Next".)
   4. Then Day 8's remote half: `python -m plasma_ai.generator --sink pubsub` against real Pub/Sub, with `PUBSUB_EMULATOR_HOST` unset.
 - Raj: review and merge `feature_ai` → `main` by PR.
 - Plan: Day 5 (freeze schema v0.1, PM chat), Day 6 (parameter ranges), then Day 9 (Beam v1 on the local runner; it can read from the emulator).
